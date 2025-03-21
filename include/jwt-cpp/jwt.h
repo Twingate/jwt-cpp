@@ -2534,15 +2534,15 @@ namespace jwt {
 		/// Header part decoded from base64
 		typename json_traits::string_type header;
 		/// Unmodified header part in base64
-		typename json_traits::string_type header_base64;
+		std::string_view header_base64;
 		/// Payload part decoded from base64
 		typename json_traits::string_type payload;
 		/// Unmodified payload part in base64
-		typename json_traits::string_type payload_base64;
+		std::string_view payload_base64;
 		/// Signature part decoded from base64
 		typename json_traits::string_type signature;
 		/// Unmodified signature part in base64
-		typename json_traits::string_type signature_base64;
+		std::string_view signature_base64;
 
 	public:
 		using basic_claim_t = basic_claim<json_traits>;
@@ -2578,13 +2578,13 @@ namespace jwt {
 			if (hdr_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
 			auto payload_end = token.find('.', hdr_end + 1);
 			if (payload_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
-			header_base64 = token.substr(0, hdr_end);
-			payload_base64 = token.substr(hdr_end + 1, payload_end - hdr_end - 1);
-			signature_base64 = token.substr(payload_end + 1);
+			header_base64 = std::string_view(&token[0], hdr_end);
+			payload_base64 = std::string_view(&token[hdr_end + 1], payload_end - hdr_end - 1);
+			signature_base64 = std::string_view(&token[payload_end + 1], token.size() - payload_end - 1);
 
-			header = decode(header_base64);
-			payload = decode(payload_base64);
-			signature = decode(signature_base64);
+			header = decode(get_header_base64());
+			payload = decode(get_payload_base64());
+			signature = decode(get_signature_base64());
 
 			this->header_claims = details::map_of_claims<json_traits>::parse_claims(header);
 			this->payload_claims = details::map_of_claims<json_traits>::parse_claims(payload);
@@ -2614,17 +2614,17 @@ namespace jwt {
 		 * Get header part as base64 string
 		 * \return header part before base64 decoding
 		 */
-		const typename json_traits::string_type& get_header_base64() const noexcept { return header_base64; }
+		typename json_traits::string_type get_header_base64() const noexcept { return std::string(header_base64.data(), header_base64.size()); }
 		/**
 		 * Get payload part as base64 string
 		 * \return payload part before base64 decoding
 		 */
-		const typename json_traits::string_type& get_payload_base64() const noexcept { return payload_base64; }
+		typename json_traits::string_type get_payload_base64() const noexcept { return std::string(payload_base64.data(), payload_base64.size()); }
 		/**
 		 * Get signature part as base64 string
 		 * \return signature part before base64 decoding
 		 */
-		const typename json_traits::string_type& get_signature_base64() const noexcept { return signature_base64; }
+		typename json_traits::string_type get_signature_base64() const noexcept { return std::string(signature_base64.data(), signature_base64.size()); }
 		/**
 		 * Get all payload claims
 		 * \return map of claims
