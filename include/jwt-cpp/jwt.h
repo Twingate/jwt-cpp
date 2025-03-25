@@ -2652,7 +2652,7 @@ namespace jwt {
 		 * \return Requested claim
 		 * \throw jwt::error::claim_not_present_exception if the claim was not present
 		 */
-		basic_claim_t get_payload_claim(const std::string& name) const {
+		basic_claim_t get_payload_claim(const typename json_traits::string_type& name) const {
 			return this->payload_claims.get_claim(name);
 		}
 		/**
@@ -2662,7 +2662,7 @@ namespace jwt {
 		 * \return Requested claim
 		 * \throw jwt::error::claim_not_present_exception if the claim was not present
 		 */
-		basic_claim_t get_header_claim(const std::string& name) const {
+		basic_claim_t get_header_claim(const typename json_traits::string_type& name) const {
 			return this->header_claims.get_claim(name);
 		}
 	};
@@ -2891,7 +2891,7 @@ namespace jwt {
 			return sign(
 				algo,
 				[](const typename json_traits::string_type& data) {
-					return base::trim<alphabet::base64url>(base::encode<alphabet::base64url>(data));
+					return base::trim<alphabet::base64url>(base::encode<alphabet::base64url>(std::string(data)));
 				},
 				ec);
 		}
@@ -3291,9 +3291,9 @@ namespace jwt {
 		 */
 		void verify(const decoded_jwt<json_traits>& jwt, std::error_code& ec) const {
 			ec.clear();
-			const typename json_traits::string_type data = jwt.get_header_base64() + "." + jwt.get_payload_base64();
-			const typename json_traits::string_type sig = jwt.get_signature();
-			const std::string algo = jwt.get_algorithm();
+			std::string data = jwt.get_header_base64() + "." + jwt.get_payload_base64();
+			std::string sig = jwt.get_signature();
+			const std::string algo = std::string(jwt.get_algorithm());
 			if (algs.count(algo) == 0) {
 				ec = error::token_verification_error::wrong_algorithm;
 				return;
