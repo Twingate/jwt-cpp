@@ -2869,12 +2869,13 @@ namespace jwt {
 
 			const auto header = encode(json_traits::serialize(typename json_traits::value_type(obj_header)));
 			const auto payload = encode(json_traits::serialize(typename json_traits::value_type(payload_claims)));
-			const auto token = header + "." + payload;
+			const auto token = std::string(header.c_str(), header.size()) + "." + std::string(payload.c_str(), payload.size());
 
 			auto signature = algo.sign(token, ec);
 			if (ec) return {};
 
-			return token + "." + encode(signature);
+			auto enc_sig = encode(signature);
+			return (token + "." + std::string(enc_sig.c_str(), enc_sig.size())).c_str();
 		}
 #ifndef JWT_DISABLE_BASE64
 		/**
@@ -2890,8 +2891,8 @@ namespace jwt {
 		typename json_traits::string_type sign(const Algo& algo, std::error_code& ec) const {
 			return sign(
 				algo,
-				[](const typename json_traits::string_type& data) {
-					return base::trim<alphabet::base64url>(base::encode<alphabet::base64url>(std::string(data)));
+				[](const std::string& data) {
+					return base::trim<alphabet::base64url>(base::encode<alphabet::base64url>(data));
 				},
 				ec);
 		}
@@ -3102,7 +3103,11 @@ namespace jwt {
 			}
 		};
 		/// Required claims
-		std::unordered_map<typename json_traits::string_type, verify_check_fn_t> claims;
+		std::unordered_map<typename json_traits::string_type, verify_check_fn_t
+#ifdef REQUIRE_SPECIAL_HASHER
+						   , typename json_traits::hasher
+#endif
+						   > claims;
 		/// Leeway time for exp, nbf and iat
 		size_t default_leeway = 0;
 		/// Instance of clock type
