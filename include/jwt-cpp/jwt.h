@@ -2561,6 +2561,14 @@ namespace jwt {
 				  return base::decode<alphabet::base64url>(base::pad<alphabet::base64url>(str));
 			  }) {}
 #endif
+		JWT_CLAIM_EXPLICIT decoded_jwt(const decoded_jwt& copy)
+			: header<json_traits>(copy), payload<json_traits>(copy), token(copy.token) {
+			payload = copy.payload;
+			header = copy.header;
+			signature = copy.signature;
+
+			split_jwt(token);
+		}
 		/**
 		 * \brief Parses a given token
 		 *
@@ -2574,20 +2582,23 @@ namespace jwt {
 		 */
 		template<typename Decode>
 		decoded_jwt(const typename json_traits::string_type& token_, Decode decode) : token(token_) {
-			auto hdr_end = token.find('.');
-			if (hdr_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
-			auto payload_end = token.find('.', hdr_end + 1);
-			if (payload_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
- 		   	header_base64 = std::string_view(&token[0], hdr_end);
- 		   	payload_base64 = std::string_view(&token[hdr_end + 1], payload_end - hdr_end - 1);
- 		   	signature_base64 = std::string_view(&token[payload_end + 1], token.size() - payload_end - 1);
-
+			split_jwt(token);
 			header = decode(get_header_base64());
 			payload = decode(get_payload_base64());
 			signature = decode(get_signature_base64());
 
 			this->header_claims = details::map_of_claims<json_traits>::parse_claims(header);
 			this->payload_claims = details::map_of_claims<json_traits>::parse_claims(payload);
+		}
+
+		void split_jwt(const typename json_traits::string_type& token) {
+			auto hdr_end = token.find('.');
+			if (hdr_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
+			auto payload_end = token.find('.', hdr_end + 1);
+			if (payload_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
+			header_base64 = std::string_view(&token[0], hdr_end);
+			payload_base64 = std::string_view(&token[hdr_end + 1], payload_end - hdr_end - 1);
+			signature_base64 = std::string_view(&token[payload_end + 1], token.size() - payload_end - 1);
 		}
 
 		/**
