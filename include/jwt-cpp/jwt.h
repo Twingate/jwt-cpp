@@ -2561,11 +2561,22 @@ namespace jwt {
 				  return base::decode<alphabet::base64url>(base::pad<alphabet::base64url>(str));
 			  }) {}
 #endif
-		JWT_CLAIM_EXPLICIT decoded_jwt(const decoded_jwt& copy)
-			: header<json_traits>(copy), payload<json_traits>(copy), token(copy.token) {
-			payload = copy.payload;
-			header = copy.header;
-			signature = copy.signature;
+		JWT_CLAIM_EXPLICIT decoded_jwt(const decoded_jwt& rhs) {
+			copy(rhs);
+		}
+
+		decoded_jwt& operator =(const decoded_jwt& rhs) {
+			copy(rhs);
+		}
+
+		void copy(const decoded_jwt& rhs) {
+			this->header = rhs.header;
+			this->payload = rhs.payload;
+
+			((std::string)token) = rhs.token;
+			payload = rhs.payload;
+			header = rhs.header;
+			signature = rhs.signature;
 
 			split_jwt(token);
 		}
