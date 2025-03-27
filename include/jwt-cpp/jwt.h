@@ -2578,9 +2578,9 @@ namespace jwt {
 			if (hdr_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
 			auto payload_end = token.find('.', hdr_end + 1);
 			if (payload_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
-			header_base64 = token.substr(0, hdr_end);
-			payload_base64 = token.substr(hdr_end + 1, payload_end - hdr_end - 1);
-			signature_base64 = token.substr(payload_end + 1);
+ 		   	header_base64 = std::string_view(&token[0], hdr_end);
+ 		   	payload_base64 = std::string_view(&token[hdr_end + 1], payload_end - hdr_end - 1);
+ 		   	signature_base64 = std::string_view(&token[payload_end + 1], token.size() - payload_end - 1);
 
 			header = decode(get_header_base64());
 			payload = decode(get_payload_base64());
