@@ -141,16 +141,11 @@ struct null {};
 
 struct optimized_string_t : public std::string_view {
     optimized_string_t() = default;
-    optimized_string_t(const optimized_string_t& rhs) : optimized_string_t() {
-        string_ = rhs.string_;
-        if (!string_.empty()) {
-//            assert(0);
-            *((std::string_view *)this) = std::string_view(string_.c_str(), string_.size());
-        }
-        else {
-            *((std::string_view *)this) = rhs;
-        }
+
+    optimized_string_t(const optimized_string_t& rhs) : std::string_view(){
+		copy(rhs);
     }
+
     optimized_string_t(const std::string_view& rhs, bool dont_copy = false) {
         if (!dont_copy) {
 //            assert(0);
@@ -175,6 +170,7 @@ struct optimized_string_t : public std::string_view {
             *((std::string_view *)this) = std::string_view(rhs, strlen(rhs));
         }
     }
+
     optimized_string_t(const char* rhs, size_t len, bool dont_copy = false) {
         if (!dont_copy) {
 //            assert(0);
@@ -185,7 +181,19 @@ struct optimized_string_t : public std::string_view {
             *((std::string_view *)this) = std::string_view(rhs, len);
         }
     }
-    std::string get_value_copy() const {
+
+	inline void copy(const optimized_string_t& rhs) {
+		string_ = rhs.string_;
+		if (!string_.empty()) {
+			//            assert(0);
+			*((std::string_view *)this) = std::string_view(string_.c_str(), string_.size());
+		}
+		else {
+			*((std::string_view *)this) = rhs;
+		}
+	}
+
+    inline std::string get_value_copy() const {
         return std::string(data(), size());
     }
 
@@ -193,10 +201,15 @@ struct optimized_string_t : public std::string_view {
         return *this;
     }
 
-    inline bool operator == (const optimized_string_t& a)
-    {
-        return a.size() == size() && !strncmp(a.data(), data(), size());
-    }
+	inline bool operator == (const optimized_string_t& a)
+	{
+		return a.size() == size() && !strncmp(a.data(), data(), size());
+	}
+	inline optimized_string_t& operator = (const optimized_string_t& a)
+	{
+		copy(a);
+		return *this;
+	}
 
     optimized_string_t substr(int start) {
         return optimized_string_t(std::string_view::substr(start));
@@ -205,11 +218,13 @@ struct optimized_string_t : public std::string_view {
     optimized_string_t substr(int start, int end) {
         return optimized_string_t(std::string_view::substr(start, end));
     }
+
     inline const char* c_str() const{
         return data();
     }
-	operator std::string() const {
-		return std::string(c_str(), size());
+
+	inline operator std::string() const {
+		return get_value_copy();
 	}
     std::string string_;
 };
@@ -914,7 +929,7 @@ template <typename Iter> inline int _parse_quadhex(input<Iter> &in) {
   return uni_ch;
 }
 
-template <typename String, typename Iter> inline bool _parse_codepoint(String &out, input<Iter> &in) {
+template <typename Iter> inline bool _parse_codepoint(std::string &out, input<Iter> &in) {
   int uni_ch;
   if ((uni_ch = _parse_quadhex(in)) == -1) {
     return false;
@@ -957,6 +972,9 @@ template <typename String, typename Iter> inline bool _parse_codepoint(String &o
 
 template <typename String, typename Iter> inline bool _parse_string(String &out, input<Iter> &in) {
   const char* begin = in.curr_index() + 1;
+  const char* previous_interrupt = begin;
+  std::string modified;
+
 
   while (1) {
     int ch = in.getc();
@@ -964,31 +982,45 @@ template <typename String, typename Iter> inline bool _parse_string(String &out,
       in.ungetc();
       return false;
     } else if (ch == '"') {
-      out = optimized_string_t(begin, in.curr_index() - begin, true);
-      return true;
+		if (modified.empty()) {
+			out = optimized_string_t(begin, in.curr_index() - begin, true);
+		}
+		else {
+			modified += std::string(previous_interrupt, in.curr_index() - previous_interrupt);
+			out = optimized_string_t(modified.c_str());
+		}
+		return true;
     } else if (ch == '\\') {
       if ((ch = in.getc()) == -1) {
         return false;
       }
       switch (ch) {
-#define MAP(sym)                                                                                                              \
+#define MAP(sym, val)                                                                                                              \
   case sym:                                                                                                                        \
-    break
-        MAP('"');
-        MAP('\\');
-        MAP('/');
-        MAP('b');
-        MAP('f');
-        MAP('n');
-        MAP('r');
-        MAP('t');
-        MAP('u');
+    modified += std::string(previous_interrupt, in.curr_index() - previous_interrupt - 1);                                         \
+    modified.push_back(val);                                                                                                            \
+    break;
+  MAP('"', '\"');
+  MAP('\\', '\\');
+  MAP('/', '/');
+  MAP('b', '\b');
+  MAP('f', '\f');
+  MAP('n', '\n');
+  MAP('r', '\r');
+  MAP('t', '\t');
 #undef MAP
 
+	  case 'u':
+		  if (!_parse_codepoint(modified, in)) {
+			  return false;
+		  }
+		  break;
       default:
         return false;
       }
-    }
+	  previous_interrupt = in.curr_index() + 1;                                    \
+
+	}
   }
   return false;
 }

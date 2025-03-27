@@ -2587,7 +2587,7 @@ namespace jwt {
 		 * \throw std::runtime_error Base64 decoding failed or invalid json
 		 */
 		template<typename Decode>
-		decoded_jwt(const typename json_traits::string_type& token, Decode decode) : token(token) {
+		decoded_jwt(const typename json_traits::string_type& token_, Decode decode) : token(token_) {
 			auto hdr_end = token.find('.');
 			if (hdr_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
 			auto payload_end = token.find('.', hdr_end + 1);

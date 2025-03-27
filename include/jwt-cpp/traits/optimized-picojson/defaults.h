@@ -33,7 +33,7 @@ namespace jwt {
 	 * \throw std::invalid_argument Token is not in correct format
 	 * \throw std::runtime_error Base64 decoding failed or invalid json
 	 */
-	inline decoded_jwt<traits::optimized_picojson_t> decode(const std::string_view& token) {
+	inline decoded_jwt<traits::optimized_picojson_t> decode(const optimized_picojson::optimized_string_t& token) {
 		return decoded_jwt<traits::optimized_picojson_t>(token);
 	}
 #endif
@@ -50,7 +50,7 @@ namespace jwt {
 	 * \throw std::runtime_error Base64 decoding failed or invalid json
 	 */
 	template<typename Decode>
-	decoded_jwt<traits::optimized_picojson_t> decode(const std::string_view& token, Decode decode) {
+	decoded_jwt<traits::optimized_picojson_t> decode(const optimized_picojson::optimized_string_t& token, Decode decode) {
 		return decoded_jwt<traits::optimized_picojson_t>(token, decode);
 	}
 
