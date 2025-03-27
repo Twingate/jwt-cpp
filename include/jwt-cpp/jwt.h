@@ -2534,15 +2534,15 @@ namespace jwt {
 		/// Header part decoded from base64
 		typename json_traits::string_type header;
 		/// Unmodified header part in base64
-		typename json_traits::string_type header_base64;
+		std::string_view header_base64;
 		/// Payload part decoded from base64
 		typename json_traits::string_type payload;
 		/// Unmodified payload part in base64
-		typename json_traits::string_type payload_base64;
+		std::string_view payload_base64;
 		/// Signature part decoded from base64
 		typename json_traits::string_type signature;
 		/// Unmodified signature part in base64
-		typename json_traits::string_type signature_base64;
+		std::string_view signature_base64;
 
 	public:
 		using basic_claim_t = basic_claim<json_traits>;
@@ -2614,17 +2614,17 @@ namespace jwt {
 		 * Get header part as base64 string
 		 * \return header part before base64 decoding
 		 */
-		const typename json_traits::string_type& get_header_base64() const noexcept { return header_base64; }
+		std::string get_header_base64() const noexcept { return std::string(header_base64.data(), header_base64.size()); }
 		/**
 		 * Get payload part as base64 string
 		 * \return payload part before base64 decoding
 		 */
-		const typename json_traits::string_type& get_payload_base64() const noexcept { return payload_base64; }
+		std::string get_payload_base64() const noexcept { return std::string(payload_base64.data(), payload_base64.size()); }
 		/**
 		 * Get signature part as base64 string
 		 * \return signature part before base64 decoding
 		 */
-		const typename json_traits::string_type& get_signature_base64() const noexcept { return signature_base64; }
+		std::string get_signature_base64() const noexcept { return std::string(signature_base64.data(), signature_base64.size()); }
 		/**
 		 * Get all payload claims
 		 * \return map of claims
