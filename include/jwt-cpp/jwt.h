@@ -2,11 +2,19 @@
 #define JWT_CPP_JWT_H
 
 #ifndef JWT_DISABLE_PICOJSON
-#ifndef PICOJSON_USE_INT64
-#define PICOJSON_USE_INT64
+	#ifndef PICOJSON_USE_INT64
+	#define PICOJSON_USE_INT64
+	#endif
+	#include "picojson/picojson.h"
+#else
+	#ifndef JWT_DISABLE_OPTIMIZED_PICOJSON
+		#ifndef OPTIMIZED_PICOJSON_USE_INT64
+		#define OPTIMIZED_PICOJSON_USE_INT64
+		#endif
+		#include "picojson/optimized_picojson.h"
+	#endif
 #endif
-#include "picojson/picojson.h"
-#endif
+
 
 #ifndef JWT_DISABLE_BASE64
 #include "base.h"
@@ -33,6 +41,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <string>
 
 #if __cplusplus >= 201402L
 #ifdef __has_include
@@ -2082,12 +2091,17 @@ namespace jwt {
 			static_assert(substr, "string_type must have a substr method taking only a start index and an overload "
 								  "taking a start and end index, both must return a string_type");
 
+#ifdef STRING_OPERATOR_PLUS_SUPPORT
 			static constexpr auto operator_plus =
 				has_operate_plus_method<string_type>::value || is_std_operate_plus_signature<string_type>::value;
 			static_assert(operator_plus,
 						  "string_type must have a '+' operator implemented which returns the concatenated string");
-
-			static constexpr auto value = substr && operator_plus;
+#endif
+			static constexpr auto value = substr
+#ifdef STRING_OPERATOR_PLUS_SUPPORT
+										  && operator_plus
+#endif
+				;
 		};
 
 		template<typename value_type, typename string_type, typename integer_type, typename object_type,
@@ -2285,7 +2299,7 @@ namespace jwt {
 			 * \param str JSON data to be parse as an object
 			 * \return content as JSON object
 			 */
-			static typename json_traits::object_type parse_claims(const typename json_traits::string_type& str) {
+			static typename json_traits::object_type parse_claims(const std::string& str) {
 				typename json_traits::value_type val;
 				if (!json_traits::parse(val, str)) throw error::invalid_json_exception();
 
@@ -2530,17 +2544,17 @@ namespace jwt {
 	class decoded_jwt : public header<json_traits>, public payload<json_traits> {
 	protected:
 		/// Unmodifed token, as passed to constructor
-		const typename json_traits::string_type token;
+		const std::string token;
 		/// Header part decoded from base64
-		typename json_traits::string_type header;
+		std::string header;
 		/// Unmodified header part in base64
 		std::string_view header_base64;
 		/// Payload part decoded from base64
-		typename json_traits::string_type payload;
+		std::string payload;
 		/// Unmodified payload part in base64
 		std::string_view payload_base64;
 		/// Signature part decoded from base64
-		typename json_traits::string_type signature;
+		std::string signature;
 		/// Unmodified signature part in base64
 		std::string_view signature_base64;
 
@@ -2557,7 +2571,7 @@ namespace jwt {
 		 * \throw std::runtime_error Base64 decoding failed or invalid json
 		 */
 		JWT_CLAIM_EXPLICIT decoded_jwt(const typename json_traits::string_type& token)
-			: decoded_jwt(token, [](const typename json_traits::string_type& str) {
+			: decoded_jwt(token, [](const std::string& str) {
 				  return base::decode<alphabet::base64url>(base::pad<alphabet::base64url>(str));
 			  }) {}
 #endif
@@ -2573,18 +2587,18 @@ namespace jwt {
 		 * \throw std::runtime_error Base64 decoding failed or invalid json
 		 */
 		template<typename Decode>
-		decoded_jwt(const typename json_traits::string_type& token, Decode decode) : token(token) {
+		decoded_jwt(const typename json_traits::string_type& token_, Decode decode) : token(token_) {
 			auto hdr_end = token.find('.');
 			if (hdr_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
 			auto payload_end = token.find('.', hdr_end + 1);
 			if (payload_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
-			header_base64 = token.substr(0, hdr_end);
-			payload_base64 = token.substr(hdr_end + 1, payload_end - hdr_end - 1);
-			signature_base64 = token.substr(payload_end + 1);
+			header_base64 = std::string_view(&token[0], hdr_end);
+			payload_base64 = std::string_view(&token[hdr_end + 1], payload_end - hdr_end - 1);
+			signature_base64 = std::string_view(&token[payload_end + 1], token.size() - payload_end - 1);
 
-			header = decode(header_base64);
-			payload = decode(payload_base64);
-			signature = decode(signature_base64);
+			header = decode(get_header_base64());
+			payload = decode(get_payload_base64());
+			signature = decode(get_signature_base64());
 
 			this->header_claims = details::map_of_claims<json_traits>::parse_claims(header);
 			this->payload_claims = details::map_of_claims<json_traits>::parse_claims(payload);
@@ -2594,22 +2608,22 @@ namespace jwt {
 		 * Get token string, as passed to constructor
 		 * \return token as passed to constructor
 		 */
-		const typename json_traits::string_type& get_token() const noexcept { return token; }
+		const std::string& get_token() const noexcept { return token; }
 		/**
 		 * Get header part as json string
 		 * \return header part after base64 decoding
 		 */
-		const typename json_traits::string_type& get_header() const noexcept { return header; }
+		const std::string& get_header() const noexcept { return header; }
 		/**
 		 * Get payload part as json string
 		 * \return payload part after base64 decoding
 		 */
-		const typename json_traits::string_type& get_payload() const noexcept { return payload; }
+		const std::string& get_payload() const noexcept { return payload; }
 		/**
 		 * Get signature part as json string
 		 * \return signature part after base64 decoding
 		 */
-		const typename json_traits::string_type& get_signature() const noexcept { return signature; }
+		const std::string& get_signature() const noexcept { return signature; }
 		/**
 		 * Get header part as base64 string
 		 * \return header part before base64 decoding
@@ -2863,12 +2877,13 @@ namespace jwt {
 
 			const auto header = encode(json_traits::serialize(typename json_traits::value_type(obj_header)));
 			const auto payload = encode(json_traits::serialize(typename json_traits::value_type(payload_claims)));
-			const auto token = header + "." + payload;
+			const auto token = std::string(header.c_str(), header.size()) + "." + std::string(payload.c_str(), payload.size());
 
 			auto signature = algo.sign(token, ec);
 			if (ec) return {};
 
-			return token + "." + encode(signature);
+			auto enc_sig = encode(signature);
+			return (token + "." + std::string(enc_sig.c_str(), enc_sig.size())).c_str();
 		}
 #ifndef JWT_DISABLE_BASE64
 		/**
@@ -2884,7 +2899,7 @@ namespace jwt {
 		typename json_traits::string_type sign(const Algo& algo, std::error_code& ec) const {
 			return sign(
 				algo,
-				[](const typename json_traits::string_type& data) {
+				[](const std::string& data) {
 					return base::trim<alphabet::base64url>(base::encode<alphabet::base64url>(data));
 				},
 				ec);
@@ -3096,7 +3111,11 @@ namespace jwt {
 			}
 		};
 		/// Required claims
-		std::unordered_map<typename json_traits::string_type, verify_check_fn_t> claims;
+		std::unordered_map<typename json_traits::string_type, verify_check_fn_t
+#ifdef REQUIRE_SPECIAL_HASHER
+						   , typename json_traits::hasher
+#endif
+						   > claims;
 		/// Leeway time for exp, nbf and iat
 		size_t default_leeway = 0;
 		/// Instance of clock type
@@ -3285,9 +3304,9 @@ namespace jwt {
 		 */
 		void verify(const decoded_jwt<json_traits>& jwt, std::error_code& ec) const {
 			ec.clear();
-			const typename json_traits::string_type data = jwt.get_header_base64() + "." + jwt.get_payload_base64();
-			const typename json_traits::string_type sig = jwt.get_signature();
-			const std::string algo = jwt.get_algorithm();
+			std::string data = jwt.get_header_base64() + "." + jwt.get_payload_base64();
+			std::string sig = jwt.get_signature();
+			const std::string algo = std::string(jwt.get_algorithm());
 			if (algs.count(algo) == 0) {
 				ec = error::token_verification_error::wrong_algorithm;
 				return;
@@ -3318,7 +3337,7 @@ namespace jwt {
 		const details::map_of_claims<json_traits> jwk_claims;
 
 	public:
-		JWT_CLAIM_EXPLICIT jwk(const typename json_traits::string_type& str)
+		JWT_CLAIM_EXPLICIT jwk(const std::string& str)
 			: jwk_claims(details::map_of_claims<json_traits>::parse_claims(str)) {}
 
 		JWT_CLAIM_EXPLICIT jwk(const typename json_traits::value_type& json)
@@ -3521,7 +3540,7 @@ namespace jwt {
 		using iterator = typename jwt_vector_t::iterator;
 		using const_iterator = typename jwt_vector_t::const_iterator;
 
-		JWT_CLAIM_EXPLICIT jwks(const typename json_traits::string_type& str) {
+		JWT_CLAIM_EXPLICIT jwks(const std::string& str) {
 			typename json_traits::value_type parsed_val;
 			if (!json_traits::parse(parsed_val, str)) throw error::invalid_json_exception();
 
@@ -3631,12 +3650,12 @@ namespace jwt {
 	}
 
 	template<typename json_traits>
-	jwk<json_traits> parse_jwk(const typename json_traits::string_type& token) {
+	jwk<json_traits> parse_jwk(const std::string& token) {
 		return jwk<json_traits>(token);
 	}
 
 	template<typename json_traits>
-	jwks<json_traits> parse_jwks(const typename json_traits::string_type& token) {
+	jwks<json_traits> parse_jwks(const std::string& token) {
 		return jwks<json_traits>(token);
 	}
 } // namespace jwt
@@ -3652,7 +3671,11 @@ std::ostream& operator<<(std::ostream& os, const jwt::basic_claim<json_traits>& 
 }
 
 #ifndef JWT_DISABLE_PICOJSON
-#include "traits/kazuho-picojson/defaults.h"
+	#include "traits/kazuho-picojson/defaults.h"
+#else
+	#ifndef JWT_DISABLE_OPTIMIZED_PICOJSON
+	#include "traits/optimized-picojson/defaults.h"
+	#endif
 #endif
 
 #endif
