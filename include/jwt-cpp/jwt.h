@@ -2565,13 +2565,25 @@ namespace jwt {
 			copy(rhs);
 		}
 
+		JWT_CLAIM_EXPLICIT decoded_jwt(const decoded_jwt&& rhs) {
+			this->header_claims = std::move(rhs.header_claims);
+			this->payload_claims = std::move(rhs.payload_claims);
+
+			((std::string)token) = std::move(rhs.token);
+			payload = std::move(rhs.payload);
+			header = std::move(rhs.header);
+			signature = std::move(rhs.signature);
+
+			split_jwt(token);
+		}
+
 		decoded_jwt& operator =(const decoded_jwt& rhs) {
 			copy(rhs);
 		}
 
 		void copy(const decoded_jwt& rhs) {
-			this->header = rhs.header;
-			this->payload = rhs.payload;
+			this->header_claims = rhs.header_claims;
+			this->payload_claims = rhs.payload_claims;
 
 			((std::string)token) = rhs.token;
 			payload = rhs.payload;
