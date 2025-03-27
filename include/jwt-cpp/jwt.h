@@ -2,11 +2,19 @@
 #define JWT_CPP_JWT_H
 
 #ifndef JWT_DISABLE_PICOJSON
-#ifndef PICOJSON_USE_INT64
-#define PICOJSON_USE_INT64
+	#ifndef PICOJSON_USE_INT64
+	#define PICOJSON_USE_INT64
+	#endif
+	#include "picojson/picojson.h"
+#else
+	#ifndef JWT_DISABLE_OPTIMIZED_PICOJSON
+		#ifndef OPTIMIZED_PICOJSON_USE_INT64
+		#define OPTIMIZED_PICOJSON_USE_INT64
+		#endif
+		#include "picojson/optimized_picojson.h"
+	#endif
 #endif
-#include "picojson/picojson.h"
-#endif
+
 
 #ifndef JWT_DISABLE_BASE64
 #include "base.h"
@@ -3663,7 +3671,11 @@ std::ostream& operator<<(std::ostream& os, const jwt::basic_claim<json_traits>& 
 }
 
 #ifndef JWT_DISABLE_PICOJSON
-#include "traits/kazuho-picojson/defaults.h"
+	#include "traits/kazuho-picojson/defaults.h"
+#else
+	#ifndef JWT_DISABLE_OPTIMIZED_PICOJSON
+	#include "traits/optimized-picojson/defaults.h"
+	#endif
 #endif
 
 #endif
