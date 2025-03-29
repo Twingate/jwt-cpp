@@ -15,7 +15,6 @@
 	#endif
 #endif
 
-
 #ifndef JWT_DISABLE_BASE64
 #include "base.h"
 #endif
@@ -41,7 +40,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include <string>
 
 #if __cplusplus >= 201402L
 #ifdef __has_include
@@ -2575,6 +2573,47 @@ namespace jwt {
 				  return base::decode<alphabet::base64url>(base::pad<alphabet::base64url>(str));
 			  }) {}
 #endif
+		JWT_CLAIM_EXPLICIT decoded_jwt(const decoded_jwt& rhs) {
+			copy_fn(rhs);
+		}
+
+		JWT_CLAIM_EXPLICIT decoded_jwt(decoded_jwt&& rhs) {
+			move_fn(std::move(rhs));
+		}
+
+		decoded_jwt& operator = (const decoded_jwt& rhs) {
+			copy_fn(rhs);
+		}
+
+		decoded_jwt&& operator = (decoded_jwt&& rhs) {
+			move_fn(rhs);
+
+			return std::move(*this);
+		}
+
+		void move_fn(decoded_jwt&& rhs) {
+			this->header_claims = std::move(rhs.header_claims);
+			this->payload_claims = std::move(rhs.payload_claims);
+
+			((std::string&&)token) = std::move(rhs.token);
+			payload = std::move(rhs.payload);
+			header = std::move(rhs.header);
+			signature = std::move(rhs.signature);
+
+			split_jwt();
+		}
+
+		void copy_fn(const decoded_jwt& rhs) {
+		this->header_claims = rhs.header_claims;
+		this->payload_claims = rhs.payload_claims;
+
+		((std::string &)token) = rhs.token;
+		payload = rhs.payload;
+		header = rhs.header;
+		signature = rhs.signature;
+
+		split_jwt();
+	}
 		/**
 		 * \brief Parses a given token
 		 *
@@ -2588,6 +2627,16 @@ namespace jwt {
 		 */
 		template<typename Decode>
 		decoded_jwt(const typename json_traits::string_type& token_, Decode decode) : token(token_) {
+			split_jwt();
+			header = decode(get_header_base64());
+			payload = decode(get_payload_base64());
+			signature = decode(get_signature_base64());
+
+			this->header_claims = details::map_of_claims<json_traits>::parse_claims(header);
+			this->payload_claims = details::map_of_claims<json_traits>::parse_claims(payload);
+		}
+
+		void split_jwt() {
 			auto hdr_end = token.find('.');
 			if (hdr_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
 			auto payload_end = token.find('.', hdr_end + 1);
@@ -2595,13 +2644,6 @@ namespace jwt {
 			header_base64 = std::string_view(&token[0], hdr_end);
 			payload_base64 = std::string_view(&token[hdr_end + 1], payload_end - hdr_end - 1);
 			signature_base64 = std::string_view(&token[payload_end + 1], token.size() - payload_end - 1);
-
-			header = decode(get_header_base64());
-			payload = decode(get_payload_base64());
-			signature = decode(get_signature_base64());
-
-			this->header_claims = details::map_of_claims<json_traits>::parse_claims(header);
-			this->payload_claims = details::map_of_claims<json_traits>::parse_claims(payload);
 		}
 
 		/**
