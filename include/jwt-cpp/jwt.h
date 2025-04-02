@@ -2172,7 +2172,7 @@ namespace jwt {
 		 * Get wrapped JSON value
 		 * \return Wrapped JSON value
 		 */
-		typename json_traits::value_type to_json() const { return val; }
+		const typename json_traits::value_type& to_json() const { return val; }
 
 		/**
 		 * Parse input stream into underlying JSON value
