@@ -64,6 +64,31 @@
 #define JWT_CLAIM_EXPLICIT explicit
 #endif
 
+
+#ifdef __cplusplus
+extern "C" int sdwan_log(int lvl, const char* fmt, ...);
+using print_cb_t = int(*)(int, const char* fmt, ...);
+#else
+int sdwan_log(int lvl, const char* fmt, ...);
+typedef int (*print_cb_t)(int, const char*, ...);
+#endif
+void end_memory_measurement(void*start_data, const char* print_header, print_cb_t print_cb);
+void *start_memory_measurement();
+
+#define START_MEM_MEASUREMENT \
+{   void* start_data;         \
+    std::string mem_stat_prefix(__func__); \
+    {                         \
+        start_data = start_memory_measurement();
+
+#define END_MEM_MEASUREMENT(prefix_) mem_stat_prefix = prefix_; \
+    END_MEM_MEASUREMENT_NO_PARAM\
+
+#define END_MEM_MEASUREMENT_NO_PARAM \
+    }                                \
+    end_memory_measurement(start_data, mem_stat_prefix.c_str(), sdwan_log); \
+}
+
 /**
  * \brief JSON Web Token
  *
@@ -2592,15 +2617,15 @@ namespace jwt {
 		}
 
 		void copy_fn(const decoded_jwt& rhs) {
-		this->header_claims = rhs.header_claims;
-		this->payload_claims = rhs.payload_claims;
+			this->header_claims = rhs.header_claims;
+			this->payload_claims = rhs.payload_claims;
 
-		((std::string &)token) = rhs.token;
-		payload = rhs.payload;
-		header = rhs.header;
-		signature = rhs.signature;
+			((std::string &)token) = rhs.token;
+			payload = rhs.payload;
+			header = rhs.header;
+			signature = rhs.signature;
 
-		split_jwt();
+			split_jwt();
 	}
 		/**
 		 * \brief Parses a given token
@@ -2614,14 +2639,22 @@ namespace jwt {
 		 * \throw std::runtime_error Base64 decoding failed or invalid json
 		 */
 		template<typename Decode>
-		decoded_jwt(const typename json_traits::string_type& token_, Decode decode) : token(token_) {
+		decoded_jwt(const typename json_traits::string_type& token_, Decode decode) {
+			START_MEM_MEASUREMENT
+			((std::string &)token) = token_;
+			END_MEM_MEASUREMENT("jwt::raw-token-size")
+			START_MEM_MEASUREMENT
 			split_jwt();
+
 			header = decode(get_header_base64());
 			payload = decode(get_payload_base64());
 			signature = decode(get_signature_base64());
+			END_MEM_MEASUREMENT("jwt::decoding-raw-2-non-raw")
 
+			START_MEM_MEASUREMENT
 			this->header_claims = details::map_of_claims<json_traits>::parse_claims(header);
 			this->payload_claims = details::map_of_claims<json_traits>::parse_claims(payload);
+			END_MEM_MEASUREMENT("jwt::building-claims")
 		}
 
 		void split_jwt() {
