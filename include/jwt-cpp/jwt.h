@@ -33,6 +33,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <cassert>
 
 #if __cplusplus >= 201402L
 #ifdef __has_include
@@ -2630,13 +2631,25 @@ namespace jwt {
 		}
 
 		void copy_fn(const decoded_jwt& rhs) {
-			this->header_claims = std::make_unique<details::map_of_claims<json_traits>>(*rhs.header_claims.get());
-			this->payload_claims = std::make_unique<details::map_of_claims<json_traits>>(*rhs.payload_claims.get());
+			if (rhs.header_claims) {
+				this->header_claims = std::make_unique<details::map_of_claims<json_traits>>(*rhs.header_claims.get());
+			}
+			if (rhs.payload_claims) {
+				this->payload_claims = std::make_unique<details::map_of_claims<json_traits>>(*rhs.payload_claims.get());
+			}
 
-			token = std::make_unique<std::string>(*rhs.token.get());
-			payload = std::make_unique<std::string>(*rhs.payload.get());
-			header = std::make_unique<std::string>(*rhs.header.get());
-			signature = std::make_unique<std::string>(*rhs.signature.get());
+			if (rhs.token) {
+				token = std::make_unique<std::string>(*rhs.token.get());
+			}
+			if (rhs.payload) {
+				payload = std::make_unique<std::string>(*rhs.payload.get());
+			}
+			if (rhs.header) {
+				header = std::make_unique<std::string>(*rhs.header.get());
+			}
+			if (rhs.signature) {
+				signature = std::make_unique<std::string>(*rhs.signature.get());
+			}
 
 			split_jwt();
 		}
@@ -2672,14 +2685,17 @@ namespace jwt {
 		}
 
 		void split_jwt() {
-			const std::string& token_val = *(token.get());
-			auto hdr_end = token_val.find('.');
-			if (hdr_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
-			auto payload_end = token_val.find('.', hdr_end + 1);
-			if (payload_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
-			header_base64 = std::string_view(&token_val[0], hdr_end);
-			payload_base64 = std::string_view(&token_val[hdr_end + 1], payload_end - hdr_end - 1);
-			signature_base64 = std::string_view(&token_val[payload_end + 1], token_val.size() - payload_end - 1);
+			if (token) {
+				const std::string& token_val = *(token.get());
+				auto hdr_end = token_val.find('.');
+				if (hdr_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
+				auto payload_end = token_val.find('.', hdr_end + 1);
+				if (payload_end == json_traits::string_type::npos)
+					throw std::invalid_argument("invalid token supplied");
+				header_base64 = std::string_view(&token_val[0], hdr_end);
+				payload_base64 = std::string_view(&token_val[hdr_end + 1], payload_end - hdr_end - 1);
+				signature_base64 = std::string_view(&token_val[payload_end + 1], token_val.size() - payload_end - 1);
+			}
 		}
 
 		void discard_token() {
@@ -2708,6 +2724,7 @@ namespace jwt {
 			if (token) {
 				return *token.get();
 			}
+			assert(0);
 			return empty;
 		}
 		/**
@@ -2718,6 +2735,7 @@ namespace jwt {
 			if (header) {
 				return *header.get();
 			}
+			assert(0);
 			return empty;
 		}
 		/**
@@ -2728,6 +2746,7 @@ namespace jwt {
 			if (payload) {
 				return *payload.get();
 			}
+			assert(0);
 			return empty;
 		}
 		/**
@@ -2738,6 +2757,7 @@ namespace jwt {
 			if (signature) {
 				return *signature.get();
 			}
+			assert(0);
 			return empty;
 		}
 		/**
@@ -2763,6 +2783,7 @@ namespace jwt {
 			if (this->payload_claims) {
 				return this->payload_claims.get_claims();
 			}
+			assert(0);
 			return {};
 		}
 		/**
@@ -2773,6 +2794,7 @@ namespace jwt {
 			if (this->header_claims) {
 				return this->header_claims.get_claims();
 			}
+			assert(0);
 			return {};
 		}
 		/**
@@ -2786,6 +2808,7 @@ namespace jwt {
 			if (this->payload_claims) {
 				return this->payload_claims->get_claim(name);
 			}
+			assert(0);
 			return {};
 		};
 		/**
@@ -2799,6 +2822,7 @@ namespace jwt {
 			if (this->header_claims) {
 				return this->header_claims->get_claim(name);
 			}
+			assert(0);
 			return {};
 		}
 	};
