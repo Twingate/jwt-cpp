@@ -2361,7 +2361,7 @@ namespace jwt {
 	template<typename json_traits>
 	class payload {
 	protected:
-		details::map_of_claims<json_traits> payload_claims;
+		std::unique_ptr<details::map_of_claims<json_traits>> payload_claims;
 
 	public:
 		using basic_claim_t = basic_claim<json_traits>;
@@ -2460,7 +2460,10 @@ namespace jwt {
 		 * \return true if claim was present, false otherwise
 		 */
 		bool has_payload_claim(const typename json_traits::string_type& name) const noexcept {
-			return payload_claims.has_claim(name);
+			if (payload_claims) {
+				return payload_claims->has_claim(name);
+			}
+			return false;
 		}
 		/**
 		 * Get payload claim
@@ -2468,7 +2471,10 @@ namespace jwt {
 		 * \throw std::runtime_error If claim was not present
 		 */
 		basic_claim_t get_payload_claim(const typename json_traits::string_type& name) const {
-			return payload_claims.get_claim(name);
+			if (payload_claims) {
+				return payload_claims->get_claim(name);
+			}
+			return {};
 		}
 	};
 
@@ -2479,7 +2485,7 @@ namespace jwt {
 	template<typename json_traits>
 	class header {
 	protected:
-		details::map_of_claims<json_traits> header_claims;
+		std::unique_ptr<details::map_of_claims<json_traits>> header_claims;
 
 	public:
 		using basic_claim_t = basic_claim<json_traits>;
@@ -2536,7 +2542,10 @@ namespace jwt {
 		 * \return true if claim was present, false otherwise
 		 */
 		bool has_header_claim(const typename json_traits::string_type& name) const noexcept {
-			return header_claims.has_claim(name);
+			if (header_claims) {
+				return header_claims->has_claim(name);
+			}
+			return false;
 		}
 		/**
 		 * Get header claim
@@ -2544,8 +2553,11 @@ namespace jwt {
 		 * \throw std::runtime_error If claim was not present
 		 */
 		basic_claim_t get_header_claim(const typename json_traits::string_type& name) const {
-			return header_claims.get_claim(name);
-		}
+			if (header_claims) {
+				return header_claims->get_claim(name);
+			}
+			return {};
+		};
 	};
 
 	/**
@@ -2555,19 +2567,20 @@ namespace jwt {
 	class decoded_jwt : public header<json_traits>, public payload<json_traits> {
 	protected:
 		/// Unmodifed token, as passed to constructor
-		const typename json_traits::string_type token;
+		std::unique_ptr<std::string> token;
 		/// Header part decoded from base64
-		typename json_traits::string_type header;
+		std::unique_ptr<std::string> header;
 		/// Unmodified header part in base64
 		std::string_view header_base64;
 		/// Payload part decoded from base64
-		typename json_traits::string_type payload;
+		std::unique_ptr<std::string> payload;
 		/// Unmodified payload part in base64
 		std::string_view payload_base64;
 		/// Signature part decoded from base64
-		typename json_traits::string_type signature;
+		std::unique_ptr<std::string> signature;
 		/// Unmodified signature part in base64
 		std::string_view signature_base64;
+		const std::string empty;
 
 	public:
 		using basic_claim_t = basic_claim<json_traits>;
@@ -2608,7 +2621,7 @@ namespace jwt {
 			this->header_claims = std::move(rhs.header_claims);
 			this->payload_claims = std::move(rhs.payload_claims);
 
-			((std::string&&)token) = std::move(rhs.token);
+			token = std::move(rhs.token);
 			payload = std::move(rhs.payload);
 			header = std::move(rhs.header);
 			signature = std::move(rhs.signature);
@@ -2617,16 +2630,16 @@ namespace jwt {
 		}
 
 		void copy_fn(const decoded_jwt& rhs) {
-			this->header_claims = rhs.header_claims;
-			this->payload_claims = rhs.payload_claims;
+			this->header_claims = std::make_unique<details::map_of_claims<json_traits>>(*rhs.header_claims.get());
+			this->payload_claims = std::make_unique<details::map_of_claims<json_traits>>(*rhs.payload_claims.get());
 
-			((std::string &)token) = rhs.token;
-			payload = rhs.payload;
-			header = rhs.header;
-			signature = rhs.signature;
+			token = std::make_unique<std::string>(*rhs.token.get());
+			payload = std::make_unique<std::string>(*rhs.payload.get());
+			header = std::make_unique<std::string>(*rhs.header.get());
+			signature = std::make_unique<std::string>(*rhs.signature.get());
 
 			split_jwt();
-	}
+		}
 		/**
 		 * \brief Parses a given token
 		 *
@@ -2641,52 +2654,92 @@ namespace jwt {
 		template<typename Decode>
 		decoded_jwt(const typename json_traits::string_type& token_, Decode decode) {
 			START_MEM_MEASUREMENT
-			((std::string &)token) = token_;
+			token = std::make_unique<std::string>(token_);
 			END_MEM_MEASUREMENT("jwt::raw-token-size")
 			START_MEM_MEASUREMENT
 			split_jwt();
 
-			header = decode(get_header_base64());
-			payload = decode(get_payload_base64());
-			signature = decode(get_signature_base64());
+			header = std::make_unique<std::string>(decode(get_header_base64()));
+			payload = std::make_unique<std::string>(decode(get_payload_base64()));
+			signature = std::make_unique<std::string>(decode(get_signature_base64()));
+
 			END_MEM_MEASUREMENT("jwt::decoding-raw-2-non-raw")
 
 			START_MEM_MEASUREMENT
-			this->header_claims = details::map_of_claims<json_traits>::parse_claims(header);
-			this->payload_claims = details::map_of_claims<json_traits>::parse_claims(payload);
+			this->header_claims = std::make_unique<details::map_of_claims<json_traits>>(details::map_of_claims<json_traits>::parse_claims(*header.get()));
+			this->payload_claims = std::make_unique<details::map_of_claims<json_traits>>(details::map_of_claims<json_traits>::parse_claims(*payload.get()));
 			END_MEM_MEASUREMENT("jwt::building-claims")
 		}
 
 		void split_jwt() {
-			auto hdr_end = token.find('.');
+			const std::string& token_val = *(token.get());
+			auto hdr_end = token_val.find('.');
 			if (hdr_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
-			auto payload_end = token.find('.', hdr_end + 1);
+			auto payload_end = token_val.find('.', hdr_end + 1);
 			if (payload_end == json_traits::string_type::npos) throw std::invalid_argument("invalid token supplied");
-			header_base64 = std::string_view(&token[0], hdr_end);
-			payload_base64 = std::string_view(&token[hdr_end + 1], payload_end - hdr_end - 1);
-			signature_base64 = std::string_view(&token[payload_end + 1], token.size() - payload_end - 1);
+			header_base64 = std::string_view(&token_val[0], hdr_end);
+			payload_base64 = std::string_view(&token_val[hdr_end + 1], payload_end - hdr_end - 1);
+			signature_base64 = std::string_view(&token_val[payload_end + 1], token_val.size() - payload_end - 1);
+		}
+
+		void discard_token() {
+			payload_base64 = std::string_view(empty.c_str(), 0);
+			header_base64 = std::string_view(empty.c_str(), 0);
+			signature_base64 = std::string_view(empty.c_str(), 0);
+			token.reset();
+
+		}
+		void discard_all_non_base64() {
+			payload.reset();
+			header.reset();
+			signature.reset();
+		}
+
+		void discard_claims() {
+			this->payload_claims.reset();
+			this->header_claims.reset();
 		}
 
 		/**
 		 * Get token string, as passed to constructor
 		 * \return token as passed to constructor
 		 */
-		const typename json_traits::string_type& get_token() const noexcept { return token; }
+		const std::string& get_token() const noexcept {
+			if (token) {
+				return *token.get();
+			}
+			return empty;
+		}
 		/**
 		 * Get header part as json string
 		 * \return header part after base64 decoding
 		 */
-		const typename json_traits::string_type& get_header() const noexcept { return header; }
+		const std::string& get_header() const noexcept {
+			if (header) {
+				return *header.get();
+			}
+			return empty;
+		}
 		/**
 		 * Get payload part as json string
 		 * \return payload part after base64 decoding
 		 */
-		const typename json_traits::string_type& get_payload() const noexcept { return payload; }
+		const std::string& get_payload() const noexcept {
+			if (payload) {
+				return *payload.get();
+			}
+			return empty;
+		}
 		/**
 		 * Get signature part as json string
 		 * \return signature part after base64 decoding
 		 */
-		const typename json_traits::string_type& get_signature() const noexcept { return signature; }
+		const std::string& get_signature() const noexcept {
+			if (signature) {
+				return *signature.get();
+			}
+			return empty;
+		}
 		/**
 		 * Get header part as base64 string
 		 * \return header part before base64 decoding
@@ -2707,14 +2760,20 @@ namespace jwt {
 		 * \return map of claims
 		 */
 		std::unordered_map<typename json_traits::string_type, basic_claim_t> get_payload_claims() const {
-			return this->payload_claims.get_claims();
+			if (this->payload_claims) {
+				return this->payload_claims.get_claims();
+			}
+			return {};
 		}
 		/**
 		 * Get all header claims
 		 * \return map of claims
 		 */
 		std::unordered_map<typename json_traits::string_type, basic_claim_t> get_header_claims() const {
-			return this->header_claims.get_claims();
+			if (this->header_claims) {
+				return this->header_claims.get_claims();
+			}
+			return {};
 		}
 		/**
 		 * Get a payload claim by name
@@ -2724,8 +2783,11 @@ namespace jwt {
 		 * \throw jwt::error::claim_not_present_exception if the claim was not present
 		 */
 		basic_claim_t get_payload_claim(const typename json_traits::string_type& name) const {
-			return this->payload_claims.get_claim(name);
-		}
+			if (this->payload_claims) {
+				return this->payload_claims->get_claim(name);
+			}
+			return {};
+		};
 		/**
 		 * Get a header claim by name
 		 *
@@ -2734,7 +2796,10 @@ namespace jwt {
 		 * \throw jwt::error::claim_not_present_exception if the claim was not present
 		 */
 		basic_claim_t get_header_claim(const typename json_traits::string_type& name) const {
-			return this->header_claims.get_claim(name);
+			if (this->header_claims) {
+				return this->header_claims->get_claim(name);
+			}
+			return {};
 		}
 	};
 
