@@ -35,6 +35,8 @@
 #include <vector>
 #include <cassert>
 
+#include "../../../../src/memory_allocation_override.hpp"
+
 #if __cplusplus >= 201402L
 #ifdef __has_include
 #if __has_include(<experimental/type_traits>)
@@ -65,30 +67,6 @@
 #define JWT_CLAIM_EXPLICIT explicit
 #endif
 
-
-#ifdef __cplusplus
-extern "C" int sdwan_log(int lvl, const char* fmt, ...);
-using print_cb_t = int(*)(int, const char* fmt, ...);
-#else
-int sdwan_log(int lvl, const char* fmt, ...);
-typedef int (*print_cb_t)(int, const char*, ...);
-#endif
-void end_memory_measurement(void*start_data, const char* print_header, print_cb_t print_cb);
-void *start_memory_measurement();
-
-#define START_MEM_MEASUREMENT \
-{   void* start_data;         \
-    std::string mem_stat_prefix(__func__); \
-    {                         \
-        start_data = start_memory_measurement();
-
-#define END_MEM_MEASUREMENT(prefix_) mem_stat_prefix = prefix_; \
-    END_MEM_MEASUREMENT_NO_PARAM\
-
-#define END_MEM_MEASUREMENT_NO_PARAM \
-    }                                \
-    end_memory_measurement(start_data, mem_stat_prefix.c_str(), sdwan_log); \
-}
 
 /**
  * \brief JSON Web Token
